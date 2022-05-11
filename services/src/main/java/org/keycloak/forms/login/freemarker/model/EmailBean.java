@@ -1,5 +1,5 @@
 /*
- * Copyright 2019 Red Hat, Inc. and/or its affiliates
+ * Copyright 2021 Red Hat, Inc. and/or its affiliates
  * and other contributors as indicated by the @author tags.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -14,13 +14,22 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+package org.keycloak.forms.login.freemarker.model;
 
-package org.keycloak.models;
+import javax.ws.rs.core.MultivaluedMap;
+import org.keycloak.models.UserModel;
 
-import org.keycloak.provider.ProviderFactory;
+public class EmailBean {
 
-/**
- * @author <a href="mailto:h2-wada@nri.co.jp">Hiroyuki Wada</a>
- */
-public interface OAuth2DeviceTokenStoreProviderFactory extends ProviderFactory<OAuth2DeviceTokenStoreProvider> {
+	private final UserModel user;
+	private final MultivaluedMap<String, String> formData;
+
+	public EmailBean(UserModel user, MultivaluedMap<String, String> formData) {
+		this.user = user;
+		this.formData = formData;
+	}
+
+	public String getValue() {
+		return formData != null ? formData.getFirst("email") : user.getEmail();
+	}
 }
