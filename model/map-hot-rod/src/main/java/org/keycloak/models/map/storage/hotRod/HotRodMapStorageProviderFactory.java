@@ -26,6 +26,8 @@ import org.keycloak.authorization.model.ResourceServer;
 import org.keycloak.authorization.model.Scope;
 import org.keycloak.common.Profile;
 import org.keycloak.component.AmphibianProviderFactory;
+import org.keycloak.events.Event;
+import org.keycloak.events.admin.AdminEvent;
 import org.keycloak.models.AuthenticatedClientSessionModel;
 import org.keycloak.models.ClientModel;
 import org.keycloak.models.ClientScopeModel;
@@ -45,6 +47,10 @@ import org.keycloak.models.map.authorization.entity.MapScopeEntity;
 import org.keycloak.models.map.authSession.MapAuthenticationSessionEntity;
 import org.keycloak.models.map.authSession.MapRootAuthenticationSessionEntity;
 import org.keycloak.models.map.clientscope.MapClientScopeEntity;
+import org.keycloak.models.map.common.AbstractEntity;
+import org.keycloak.models.map.common.StringKeyConverter;
+import org.keycloak.models.map.events.MapAdminEventEntity;
+import org.keycloak.models.map.events.MapAuthEventEntity;
 import org.keycloak.models.map.group.MapGroupEntity;
 import org.keycloak.models.map.loginFailure.MapUserLoginFailureEntity;
 import org.keycloak.models.map.realm.MapRealmEntity;
@@ -73,6 +79,12 @@ import org.keycloak.models.map.storage.hotRod.authorization.HotRodResourceServer
 import org.keycloak.models.map.storage.hotRod.authorization.HotRodResourceServerEntityDelegate;
 import org.keycloak.models.map.storage.hotRod.authorization.HotRodScopeEntity;
 import org.keycloak.models.map.storage.hotRod.authorization.HotRodScopeEntityDelegate;
+import org.keycloak.models.map.storage.hotRod.common.AbstractHotRodEntity;
+import org.keycloak.models.map.storage.hotRod.common.HotRodEntityDelegate;
+import org.keycloak.models.map.storage.hotRod.events.HotRodAdminEventEntity;
+import org.keycloak.models.map.storage.hotRod.events.HotRodAdminEventEntityDelegate;
+import org.keycloak.models.map.storage.hotRod.events.HotRodAuthEventEntity;
+import org.keycloak.models.map.storage.hotRod.events.HotRodAuthEventEntityDelegate;
 import org.keycloak.models.map.storage.hotRod.loginFailure.HotRodUserLoginFailureEntity;
 import org.keycloak.models.map.storage.hotRod.loginFailure.HotRodUserLoginFailureEntityDelegate;
 import org.keycloak.models.map.storage.hotRod.role.HotRodRoleEntity;
@@ -113,6 +125,7 @@ import org.keycloak.models.map.storage.hotRod.userSession.HotRodAuthenticatedCli
 import org.keycloak.models.map.storage.hotRod.userSession.HotRodAuthenticatedClientSessionEntityDelegate;
 import org.keycloak.models.map.storage.hotRod.userSession.HotRodUserSessionEntity;
 import org.keycloak.models.map.storage.hotRod.userSession.HotRodUserSessionEntityDelegate;
+import org.keycloak.models.map.storage.hotRod.userSession.HotRodUserSessionMapStorage;
 import org.keycloak.models.map.user.MapUserConsentEntity;
 import org.keycloak.models.map.user.MapUserCredentialEntity;
 import org.keycloak.models.map.user.MapUserEntity;
@@ -124,11 +137,14 @@ import org.keycloak.sessions.RootAuthenticationSessionModel;
 
 import java.util.HashMap;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
 public class HotRodMapStorageProviderFactory implements AmphibianProviderFactory<MapStorageProvider>, MapStorageProviderFactory, EnvironmentDependentProviderFactory {
 
     public static final String PROVIDER_ID = "hotrod";
     private static final Logger LOG = Logger.getLogger(HotRodMapStorageProviderFactory.class);
+    private final Map<Class<?>, HotRodMapStorage> storages = new ConcurrentHashMap<>();
+
 
     private final static DeepCloner CLONER = new DeepCloner.Builder()
             .constructor(MapRootAuthenticationSessionEntity.class,  HotRodRootAuthenticationSessionEntityDelegate::new)
@@ -171,6 +187,9 @@ public class HotRodMapStorageProviderFactory implements AmphibianProviderFactory
             .constructor(MapScopeEntity.class,                      HotRodScopeEntityDelegate::new)
             .constructor(MapPolicyEntity.class,                     HotRodPolicyEntityDelegate::new)
             .constructor(MapPermissionTicketEntity.class,           HotRodPermissionTicketEntityDelegate::new)
+
+            .constructor(MapAuthEventEntity.class,                  HotRodAuthEventEntityDelegate::new)
+            .constructor(MapAdminEventEntity.class,                 HotRodAdminEventEntityDelegate::new)
 
             .build();
 
@@ -285,21 +304,43 @@ public class HotRodMapStorageProviderFactory implements AmphibianProviderFactory
                         return "authz";
                     }
                 });
+
+        // Events
+        ENTITY_DESCRIPTOR_MAP.put(Event.class,
+                new HotRodEntityDescriptor<>(Event.class,
+                        HotRodAuthEventEntity.class,
+                        HotRodAuthEventEntityDelegate::new));
+
+        ENTITY_DESCRIPTOR_MAP.put(AdminEvent.class,
+                new HotRodEntityDescriptor<>(AdminEvent.class,
+                        HotRodAdminEventEntity.class,
+                        HotRodAdminEventEntityDelegate::new));
     }
 
     @Override
     public MapStorageProvider create(KeycloakSession session) {
-        HotRodConnectionProvider cacheProvider = session.getProvider(HotRodConnectionProvider.class);
-        
-        if (cacheProvider == null) {
-            throw new IllegalStateException("Cannot find HotRodConnectionProvider interface implementation");
-        }
-        
-        return new HotRodMapStorageProvider(this, cacheProvider, CLONER);
+        return new HotRodMapStorageProvider(session, this);
     }
 
     public HotRodEntityDescriptor<?, ?> getEntityDescriptor(Class<?> c) {
         return ENTITY_DESCRIPTOR_MAP.get(c);
+    }
+
+    public <E extends AbstractHotRodEntity, V extends HotRodEntityDelegate<E> & AbstractEntity, M> HotRodMapStorage<String, E, V, M> getHotRodStorage(KeycloakSession session, Class<M> modelType, MapStorageProviderFactory.Flag... flags) {
+        if (modelType == UserSessionModel.class) getHotRodStorage(session, AuthenticatedClientSessionModel.class, flags);
+        return storages.computeIfAbsent(modelType, c -> createHotRodStorage(session, modelType, flags));
+    }
+
+    private <E extends AbstractHotRodEntity, V extends HotRodEntityDelegate<E> & AbstractEntity, M> HotRodMapStorage<String, E, V, M> createHotRodStorage(KeycloakSession session, Class<M> modelType, MapStorageProviderFactory.Flag... flags) {
+        HotRodConnectionProvider connectionProvider = session.getProvider(HotRodConnectionProvider.class);
+        HotRodEntityDescriptor<E, V> entityDescriptor = (HotRodEntityDescriptor<E, V>) getEntityDescriptor(modelType);
+
+        if (modelType == UserSessionModel.class) {
+            HotRodMapStorage clientSessionStore = getHotRodStorage(session, AuthenticatedClientSessionModel.class);
+            return new HotRodUserSessionMapStorage(clientSessionStore, connectionProvider.getRemoteCache(entityDescriptor.getCacheName()), StringKeyConverter.StringKey.INSTANCE, entityDescriptor, CLONER);
+
+        }
+        return new HotRodMapStorage<>(connectionProvider.getRemoteCache(entityDescriptor.getCacheName()), StringKeyConverter.StringKey.INSTANCE, entityDescriptor, CLONER);
     }
 
     @Override
