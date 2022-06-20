@@ -54,6 +54,7 @@ import io.quarkus.fs.util.ZipUtils;
 import org.apache.commons.io.FileUtils;
 
 import org.keycloak.common.Version;
+import org.keycloak.it.junit5.extension.CLIResult;
 import org.keycloak.quarkus.runtime.Environment;
 import org.keycloak.quarkus.runtime.cli.command.Build;
 import org.keycloak.quarkus.runtime.configuration.mappers.PropertyMapper;
@@ -86,7 +87,7 @@ public final class RawKeycloakDistribution implements KeycloakDistribution {
     }
 
     @Override
-    public void start(List<String> arguments) {
+    public CLIResult run(List<String> arguments) {
         reset();
         if (manualStop && isRunning()) {
             throw new IllegalStateException("Server already running. You should manually stop the server before starting it again.");
@@ -113,6 +114,8 @@ public final class RawKeycloakDistribution implements KeycloakDistribution {
                 stop();
             }
         }
+
+        return CLIResult.create(getOutputStream(), getErrorStream(), getExitCode());
     }
 
     @Override
@@ -325,7 +328,7 @@ public final class RawKeycloakDistribution implements KeycloakDistribution {
 
             File distFile = new File("../../dist/" + File.separator + "target" + File.separator + "keycloak-" + Version.VERSION_KEYCLOAK + ".zip");
             if (!distFile.exists()) {
-                throw new RuntimeException("Distribution archive " + distFile.getAbsolutePath() +" doesn't exists");
+                throw new RuntimeException("Distribution archive " + distFile.getAbsolutePath() +" doesn't exist");
             }
             distRootPath.toFile().mkdirs();
             String distDirName = distFile.getName();
@@ -423,11 +426,11 @@ public final class RawKeycloakDistribution implements KeycloakDistribution {
     }
 
     @Override
-    public void removeProperty(String key) {
+    public void removeProperty(String name) {
         updateProperties(new Consumer<Properties>() {
             @Override
             public void accept(Properties properties) {
-                properties.remove(key);
+                properties.remove(name);
             }
         }, distPath.resolve("conf").resolve("keycloak.conf").toFile());
     }

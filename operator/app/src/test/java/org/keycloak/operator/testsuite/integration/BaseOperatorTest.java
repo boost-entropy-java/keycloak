@@ -1,4 +1,21 @@
-package org.keycloak.operator;
+/*
+ * Copyright 2022 Red Hat, Inc. and/or its affiliates
+ * and other contributors as indicated by the @author tags.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+package org.keycloak.operator.testsuite.integration;
 
 import io.fabric8.kubernetes.api.model.HasMetadata;
 import io.fabric8.kubernetes.api.model.NamespaceBuilder;
@@ -19,6 +36,7 @@ import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
+import org.keycloak.operator.Constants;
 import org.keycloak.operator.crds.v2alpha1.deployment.Keycloak;
 
 import javax.enterprise.inject.Instance;
@@ -34,9 +52,9 @@ import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.keycloak.operator.utils.K8sUtils.getResourceFromFile;
+import static org.keycloak.operator.testsuite.utils.K8sUtils.getResourceFromFile;
 
-public abstract class ClusterOperatorTest {
+public abstract class BaseOperatorTest {
 
   public static final String QUARKUS_KUBERNETES_DEPLOYMENT_TARGET = "quarkus.kubernetes.deployment-target";
   public static final String OPERATOR_DEPLOYMENT_PROP = "test.operator.deployment";
@@ -96,19 +114,9 @@ public abstract class ClusterOperatorTest {
   }
 
   private static void createRBACresourcesAndOperatorDeployment() throws FileNotFoundException {
-    Log.info("Creating RBAC into Namespace " + namespace);
-    List<HasMetadata> hasMetadata = k8sclient.load(new FileInputStream(TARGET_KUBERNETES_GENERATED_YML_FOLDER + deploymentTarget + ".yml"))
-            .inNamespace(namespace).get();
-    hasMetadata.stream()
-            .map(b -> {
-              if ("Deployment".equalsIgnoreCase(b.getKind()) && b.getMetadata().getName().contains("operator")) {
-                ((Deployment) b).getSpec().getTemplate().getSpec().getContainers().get(0).setImagePullPolicy("Never");
-              }
-              return b;
-            }).forEach(c -> {
-              Log.info("processing part : " + c.getKind() + "--" + c.getMetadata().getName() + " -- " + namespace);
-              k8sclient.resource(c).inNamespace(namespace).createOrReplace();
-            });
+    Log.info("Creating RBAC and Deployment into Namespace " + namespace);
+    k8sclient.load(new FileInputStream(TARGET_KUBERNETES_GENERATED_YML_FOLDER + deploymentTarget + ".yml"))
+            .inNamespace(namespace).createOrReplace();
   }
 
   private static void cleanRBACresourcesAndOperatorDeployment() throws FileNotFoundException {
@@ -116,6 +124,7 @@ public abstract class ClusterOperatorTest {
     k8sclient.load(new FileInputStream(TARGET_KUBERNETES_GENERATED_YML_FOLDER +deploymentTarget+".yml"))
             .inNamespace(namespace).delete();
   }
+
   private static void createCRDs() {
     Log.info("Creating CRDs");
     try {
@@ -134,7 +143,7 @@ public abstract class ClusterOperatorTest {
   private static void registerReconcilers() {
     Log.info("Registering reconcilers for operator : " + operator + " [" + operatorDeployment + "]");
 
-    for (Reconciler reconciler : reconcilers) {
+    for (Reconciler<?> reconciler : reconcilers) {
       final var config = configuration.getConfigurationFor(reconciler);
       if (!config.isRegistrationDelayed()) {
         Log.info("Register and apply : " + reconciler.getClass().getName());
@@ -160,7 +169,7 @@ public abstract class ClusterOperatorTest {
   protected static void deployDB() {
     // DB
     Log.info("Creating new PostgreSQL deployment");
-    k8sclient.load(ClusterOperatorTest.class.getResourceAsStream("/example-postgres.yaml")).inNamespace(namespace).createOrReplace();
+    k8sclient.load(BaseOperatorTest.class.getResourceAsStream("/example-postgres.yaml")).inNamespace(namespace).createOrReplace();
 
     // Check DB has deployed and ready
     Log.info("Checking Postgres is running");
@@ -216,7 +225,7 @@ public abstract class ClusterOperatorTest {
                       .withLabels(Constants.DEFAULT_LABELS)
                       .list()
                       .getItems();
-              assertThat(kcDeployments.size()).isEqualTo(0);
+              assertThat(kcDeployments.size()).isZero();
             });
   }
 
