@@ -21,7 +21,7 @@ jobs:
     if: ${{ ( github.event_name != 'schedule' ) || ( github.event_name == 'schedule' && github.repository == 'keycloak/keycloak' ) }}
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - uses: actions/setup-java@v3
         with:
           distribution: 'temurin'
@@ -59,7 +59,7 @@ jobs:
     runs-on: ubuntu-latest
     needs: build
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - uses: actions/setup-java@v3
         with:
           distribution: 'temurin'
@@ -96,7 +96,7 @@ jobs:
     runs-on: ubuntu-latest
     needs: build
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - uses: actions/setup-java@v3
         with:
           distribution: 'temurin'
@@ -138,7 +138,7 @@ jobs:
         tests: ['group1','group2','group3']
       fail-fast: false
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         with:
           fetch-depth: 2
 
@@ -233,7 +233,7 @@ jobs:
           - 5432:5432
 
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         with:
           fetch-depth: 2
 
@@ -294,7 +294,7 @@ jobs:
     needs: build
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         with:
           fetch-depth: 2
 
@@ -348,7 +348,7 @@ jobs:
     env:
       MAVEN_OPTS: -Xmx1024m
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         with:
           fetch-depth: 2
 
@@ -408,7 +408,7 @@ jobs:
     env:
       MAVEN_OPTS: -Xmx1024m
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
 
       - uses: actions/setup-java@v3
         with:
@@ -459,7 +459,7 @@ jobs:
     env:
       MAVEN_OPTS: -Xmx1024m
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - uses: actions/setup-java@v3
         with:
           distribution: 'temurin'
@@ -514,12 +514,12 @@ jobs:
     needs: build
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         with:
           repository: keycloak/keycloak-quickstarts
           ref: main # default is "latest"
 
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         with:
           path: keycloak
 
@@ -567,7 +567,7 @@ jobs:
     needs: build
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v4
         with:
           fetch-depth: 2
 
